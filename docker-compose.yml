@@ -1,0 +1,8 @@
+services:
+  mikrotik-monitor:
+    build: .
+    container_name: mikrotik-monitor
+    env_file: .env
+    ports:
+      - "${WEB_PORT:-3000}:${WEB_PORT:-3000}"
+    restart: unless-stopped
