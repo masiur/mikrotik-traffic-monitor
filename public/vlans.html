@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Monitor — VLANs</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0e17;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: #111827;
+            border-bottom: 1px solid #1e293b;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .header-logo { height: 32px; display: none; }
+        .header-logo.visible { display: block; }
+        .header h1 { font-size: 20px; font-weight: 600; color: #f1f5f9; }
+        nav { display: flex; gap: 4px; margin-left: 12px; }
+        nav a {
+            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #94a3b8;
+            transition: all 0.2s;
+        }
+        nav a:hover { background: #1e293b; color: #e2e8f0; }
+        nav a.active { background: #3b82f6; color: #fff; }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #ef4444;
+            transition: background 0.3s;
+        }
+        .status-dot.connected { background: #22c55e; }
+        .container { padding: 20px 24px; }
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background: #111827;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            padding: 16px;
+        }
+        .summary-card .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            margin-bottom: 6px;
+        }
+        .summary-card .sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+        .speed-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        .speed-row svg { flex-shrink: 0; }
+        .speed-row .speed-val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .tx { color: #f59e0b; }
+        .rx { color: #3b82f6; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+        .chart-card {
+            background: #111827;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            padding: 16px;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .chart-title { font-size: 15px; font-weight: 600; color: #f1f5f9; }
+        .chart-live {
+            display: flex;
+            gap: 16px;
+            font-size: 13px;
+            font-variant-numeric: tabular-nums;
+        }
+        .chart-live-item { display: flex; align-items: center; gap: 4px; }
+        .iface-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #1e293b;
+            color: #94a3b8;
+        }
+        .iface-status.running { background: #064e3b; color: #34d399; }
+        .iface-status.down { background: #450a0a; color: #f87171; }
+        canvas { max-height: 200px; }
+        .error-banner {
+            background: #450a0a;
+            border: 1px solid #7f1d1d;
+            color: #fca5a5;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <img class="header-logo" id="appLogo" src="" alt="Logo">
+            <h1 id="appTitle">Traffic Monitor</h1>
+            <nav>
+                <a href="/">WAN</a>
+                <a href="/vlans" class="active">VLANs</a>
+            </nav>
+        </div>
+        <div class="status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+    <div class="container">
+        <div class="error-banner" id="errorBanner"></div>
+        <div class="summary-row" id="summaryRow"></div>
+        <div class="chart-grid" id="chartGrid"></div>
+    </div>
+
+    <script>
+        const MAX_POINTS = 120;
+        const charts = {};
+        let vlanInterfaces = [];
+
+        const DL_COLOR = '#3b82f6';
+        const UL_COLOR = '#f59e0b';
+        const DL_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v9m0 0L4.5 7.5M8 11l3.5-3.5" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/></svg>';
+        const UL_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 14V5m0 0L4.5 8.5M8 5l3.5 3.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3h10" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/></svg>';
+
+        function formatSpeed(mbps) {
+            if (mbps >= 1000) return (mbps / 1000).toFixed(2) + ' Gbps';
+            if (mbps >= 1) return mbps.toFixed(2) + ' Mbps';
+            return (mbps * 1000).toFixed(1) + ' Kbps';
+        }
+
+        function formatBytes(bytes) {
+            if (bytes >= 1e12) return (bytes / 1e12).toFixed(2) + ' TB';
+            if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + ' GB';
+            if (bytes >= 1e6) return (bytes / 1e6).toFixed(1) + ' MB';
+            return (bytes / 1e3).toFixed(0) + ' KB';
+        }
+
+        function initUI(ifaces) {
+            vlanInterfaces = ifaces;
+            const summaryRow = document.getElementById('summaryRow');
+            const chartGrid = document.getElementById('chartGrid');
+
+            summaryRow.innerHTML = `
+                <div class="summary-card">
+                    <div class="label">Total VLAN Download</div>
+                    <div class="speed-row">${DL_ICON}<span class="speed-val rx" id="totalRx">0 Kbps</span></div>
+                    <div class="sub" id="totalRxBytes">0 KB</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">Total VLAN Upload</div>
+                    <div class="speed-row">${UL_ICON}<span class="speed-val tx" id="totalTx">0 Kbps</span></div>
+                    <div class="sub" id="totalTxBytes">0 KB</div>
+                </div>
+            `;
+
+            vlanInterfaces.forEach(iface => {
+                summaryRow.innerHTML += `
+                    <div class="summary-card">
+                        <div class="label">${iface}</div>
+                        <div class="speed-row">${DL_ICON}<span class="speed-val rx" id="speed-rx-${iface}">0 Kbps</span></div>
+                        <div class="speed-row">${UL_ICON}<span class="speed-val tx" id="speed-tx-${iface}">0 Kbps</span></div>
+                        <div class="sub"><span class="iface-status" id="status-${iface}">--</span></div>
+                    </div>
+                `;
+                chartGrid.innerHTML += `
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <span class="chart-title">${iface}</span>
+                            <div class="chart-live">
+                                <span class="chart-live-item" style="color:${DL_COLOR}">${DL_ICON}&nbsp;<span id="live-rx-${iface}">0</span></span>
+                                <span class="chart-live-item" style="color:${UL_COLOR}">${UL_ICON}&nbsp;<span id="live-tx-${iface}">0</span></span>
+                            </div>
+                        </div>
+                        <canvas id="chart-${iface}"></canvas>
+                    </div>
+                `;
+            });
+
+            vlanInterfaces.forEach(iface => {
+                const ctx = document.getElementById(`chart-${iface}`).getContext('2d');
+                charts[iface] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            { label: 'Download (Mbps)', data: [], borderColor: DL_COLOR, backgroundColor: DL_COLOR + '20', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+                            { label: 'Upload (Mbps)', data: [], borderColor: UL_COLOR, backgroundColor: UL_COLOR + '20', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+                        ],
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: true,
+                        animation: { duration: 0 },
+                        interaction: { mode: 'index', intersect: false },
+                        scales: {
+                            x: { display: true, grid: { color: '#1e293b' }, ticks: { color: '#475569', maxTicksLimit: 10, font: { size: 10 } } },
+                            y: { display: true, beginAtZero: true, grid: { color: '#1e293b' }, ticks: { color: '#475569', font: { size: 10 }, callback: v => formatSpeed(v) } },
+                        },
+                        plugins: {
+                            legend: { display: true, labels: { color: '#94a3b8', boxWidth: 12, font: { size: 11 } } },
+                            tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + formatSpeed(ctx.raw) } },
+                        },
+                    },
+                });
+            });
+        }
+
+        async function boot() {
+            const res = await fetch('/api/config');
+            const config = await res.json();
+
+            document.getElementById('appTitle').textContent = config.appTitle;
+            document.title = config.appTitle + ' — VLANs';
+
+            if (config.appLogo) {
+                const logo = document.getElementById('appLogo');
+                logo.src = config.appLogo;
+                logo.classList.add('visible');
+            }
+
+            initUI(config.vlanInterfaces);
+
+            const socket = io();
+
+            socket.on('connect', () => {
+                socket.emit('start_monitor');
+            });
+
+            socket.on('connected', (data) => {
+                document.getElementById('statusDot').classList.add('connected');
+                document.getElementById('statusText').textContent = `${data.routerName} @ ${data.host}`;
+            });
+
+            socket.on('vlan_traffic', (data) => {
+                const speeds = data.speeds;
+                const label = new Date(data.timestamp * 1000).toLocaleTimeString();
+
+                let totalTx = 0, totalRx = 0, totalTxBytes = 0, totalRxBytes = 0;
+
+                vlanInterfaces.forEach(iface => {
+                    if (!speeds[iface]) return;
+                    const s = speeds[iface];
+                    totalTx += s.txMbps; totalRx += s.rxMbps;
+                    totalTxBytes += s.txBytesTotal; totalRxBytes += s.rxBytesTotal;
+
+                    const rxEl = document.getElementById(`speed-rx-${iface}`);
+                    const txEl = document.getElementById(`speed-tx-${iface}`);
+                    if (rxEl) rxEl.textContent = formatSpeed(s.rxMbps);
+                    if (txEl) txEl.textContent = formatSpeed(s.txMbps);
+
+                    const liveRx = document.getElementById(`live-rx-${iface}`);
+                    const liveTx = document.getElementById(`live-tx-${iface}`);
+                    if (liveRx) liveRx.textContent = formatSpeed(s.rxMbps);
+                    if (liveTx) liveTx.textContent = formatSpeed(s.txMbps);
+
+                    const statusEl = document.getElementById(`status-${iface}`);
+                    if (statusEl) {
+                        if (s.disabled) { statusEl.textContent = 'DISABLED'; statusEl.className = 'iface-status down'; }
+                        else if (s.running) { statusEl.textContent = 'RUNNING'; statusEl.className = 'iface-status running'; }
+                        else { statusEl.textContent = 'DOWN'; statusEl.className = 'iface-status down'; }
+                    }
+
+                    const chart = charts[iface];
+                    if (chart) {
+                        chart.data.labels.push(label);
+                        chart.data.datasets[0].data.push(s.rxMbps);
+                        chart.data.datasets[1].data.push(s.txMbps);
+                        if (chart.data.labels.length > MAX_POINTS) {
+                            chart.data.labels.shift();
+                            chart.data.datasets[0].data.shift();
+                            chart.data.datasets[1].data.shift();
+                        }
+                        chart.update('none');
+                    }
+                });
+
+                document.getElementById('totalRx').textContent = formatSpeed(totalRx);
+                document.getElementById('totalTx').textContent = formatSpeed(totalTx);
+                document.getElementById('totalRxBytes').textContent = formatBytes(totalRxBytes) + ' total';
+                document.getElementById('totalTxBytes').textContent = formatBytes(totalTxBytes) + ' total';
+            });
+
+            socket.on('error', (data) => {
+                document.getElementById('errorBanner').textContent = data.message;
+                document.getElementById('errorBanner').style.display = 'block';
+                document.getElementById('statusDot').classList.remove('connected');
+                document.getElementById('statusText').textContent = 'Disconnected';
+            });
+
+            socket.on('status', (data) => {
+                document.getElementById('statusText').textContent = data.message;
+                document.getElementById('statusDot').classList.remove('connected');
+            });
+        }
+
+        boot();
+    </script>
+</body>
+</html>
