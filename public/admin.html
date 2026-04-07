@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - MikroTik</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    body.light { background: #f1f5f9; color: #1e293b; }
+
+    /* ── Login ── */
+    .login-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .login-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 40px 32px;
+      width: 100%;
+      max-width: 380px;
+    }
+    body.light .login-card { background: #fff; border-color: #e2e8f0; }
+    .login-card h1 { font-size: 22px; margin-bottom: 8px; }
+    .login-card p.sub { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+    body.light .login-card p.sub { color: #64748b; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+    body.light .field label { color: #64748b; }
+    .field input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .field input:focus { border-color: #6366f1; }
+    body.light .field input { background: #f8fafc; border-color: #cbd5e1; color: #1e293b; }
+    .login-btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #6366f1;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s;
+    }
+    .login-btn:hover { background: #4f46e5; }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .err-msg { color: #f87171; font-size: 13px; margin-top: 12px; display: none; }
+
+    /* ── Dashboard ── */
+    .header {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    body.light .header { background: #fff; border-bottom: 1px solid #e2e8f0; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .badge {
+      font-size: 12px; padding: 4px 10px; border-radius: 12px;
+      background: #334155; color: #94a3b8;
+    }
+    body.light .badge { background: #e2e8f0; color: #64748b; }
+    .badge.online { background: #064e3b; color: #6ee7b7; }
+    body.light .badge.online { background: #d1fae5; color: #065f46; }
+    .btn {
+      padding: 6px 14px; border-radius: 6px; border: 1px solid #475569;
+      background: transparent; color: #e2e8f0; cursor: pointer; font-size: 13px;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #334155; }
+    body.light .btn { border-color: #cbd5e1; color: #1e293b; }
+    body.light .btn:hover { background: #e2e8f0; }
+    .btn-danger { border-color: #7f1d1d; color: #fca5a5; }
+    .btn-danger:hover { background: #450a0a; }
+    body.light .btn-danger { border-color: #fecaca; color: #b91c1c; }
+    body.light .btn-danger:hover { background: #fef2f2; }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .stats-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .stat-card {
+      background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+      padding: 16px 24px; min-width: 160px;
+    }
+    body.light .stat-card { background: #fff; border-color: #e2e8f0; }
+    .stat-card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    body.light .stat-card .label { color: #64748b; }
+
+    .search-bar { margin-bottom: 16px; }
+    .search-bar input {
+      width: 100%; max-width: 400px; padding: 10px 16px; border-radius: 8px;
+      border: 1px solid #334155; background: #1e293b; color: #e2e8f0;
+      font-size: 14px; outline: none;
+    }
+    .search-bar input:focus { border-color: #6366f1; }
+    body.light .search-bar input { background: #fff; border-color: #cbd5e1; color: #1e293b; }
+
+    .filter-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .filter-bar label { font-size: 13px; color: #94a3b8; }
+    body.light .filter-bar label { color: #64748b; }
+    .filter-bar select {
+      padding: 8px 14px; border-radius: 8px; border: 1px solid #334155;
+      background: #1e293b; color: #e2e8f0; font-size: 14px; outline: none;
+    }
+    .filter-bar select:focus { border-color: #6366f1; }
+    body.light .filter-bar select { background: #fff; border-color: #cbd5e1; color: #1e293b; }
+
+    .table-wrap {
+      background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: hidden;
+    }
+    body.light .table-wrap { background: #fff; border-color: #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th {
+      text-align: left; padding: 12px 16px; background: #0f172a;
+      border-bottom: 1px solid #334155; font-weight: 600; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8;
+      position: sticky; top: 0;
+    }
+    body.light thead th { background: #f8fafc; border-bottom-color: #e2e8f0; color: #64748b; }
+    tbody td { padding: 10px 16px; border-bottom: 1px solid #1e293b; }
+    body.light tbody td { border-bottom-color: #f1f5f9; }
+    tbody tr:hover { background: #334155; }
+    body.light tbody tr:hover { background: #f8fafc; }
+    .mac { font-family: "SF Mono", "Fira Code", monospace; font-size: 13px; }
+    .ip { font-family: "SF Mono", "Fira Code", monospace; font-weight: 600; }
+    .type-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+    .type-badge.dynamic { background: #1e3a5f; color: #60a5fa; }
+    .type-badge.static { background: #3b1f4e; color: #c084fc; }
+    body.light .type-badge.dynamic { background: #dbeafe; color: #2563eb; }
+    body.light .type-badge.static { background: #f3e8ff; color: #7c3aed; }
+    .dhcp-bound { color: #6ee7b7; }
+    body.light .dhcp-bound { color: #059669; }
+    .traffic-cell { font-family: "SF Mono", "Fira Code", monospace; font-size: 13px; }
+    .upload-cell { color: #60a5fa; }
+    .download-cell { color: #6ee7b7; }
+    body.light .upload-cell { color: #2563eb; }
+    body.light .download-cell { color: #059669; }
+    .total-cell { font-weight: 600; }
+
+    .loading { text-align: center; padding: 60px; color: #64748b; }
+    .loading .spinner {
+      width: 32px; height: 32px; border: 3px solid #334155;
+      border-top-color: #6366f1; border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-msg { text-align: center; padding: 40px; color: #f87171; }
+    .nav-links a { color: #6366f1; text-decoration: none; font-size: 13px; }
+    .nav-links a:hover { text-decoration: underline; }
+
+    @media (max-width: 768px) {
+      .container { padding: 16px; }
+      .header { padding: 12px 16px; }
+      .header h1 { font-size: 16px; }
+      table { font-size: 12px; }
+      thead th, tbody td { padding: 8px 10px; }
+      .col-hostname, .col-dhcp { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ── Login View ── -->
+  <div class="login-wrap" id="loginView">
+    <div class="login-card">
+      <h1>Admin Panel</h1>
+      <p class="sub">Sign in to manage connected users</p>
+      <form id="loginForm">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="login-btn" id="loginBtn">Sign In</button>
+      </form>
+      <div class="err-msg" id="loginErr">Invalid credentials</div>
+    </div>
+  </div>
+
+  <!-- ── Dashboard View ── -->
+  <div id="dashView" style="display:none">
+    <div class="header">
+      <div class="header-left">
+        <h1>Connected Users</h1>
+        <span class="badge" id="routerBadge">--</span>
+        <span class="badge" id="statusBadge">Loading...</span>
+      </div>
+      <div class="header-right">
+        <div class="nav-links">
+          <a href="/">WAN</a> &middot;
+          <a href="/vlans">VLANs</a>
+        </div>
+        <button class="btn" id="themeToggle" title="Toggle theme">Light</button>
+        <button class="btn" id="refreshBtn">Refresh</button>
+        <button class="btn btn-danger" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="label">Total Users</div>
+          <div class="value" id="totalCount">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Dynamic</div>
+          <div class="value" id="dynamicCount">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Static</div>
+          <div class="value" id="staticCount">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Total Traffic</div>
+          <div class="value" id="totalTraffic">--</div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <label for="typeFilter">Show:</label>
+        <select id="typeFilter">
+          <option value="all">All</option>
+          <option value="queue-only">Queue Only</option>
+          <option value="no-queue">No Queue</option>
+        </select>
+        <label for="vlanFilter">VLAN:</label>
+        <select id="vlanFilter">
+          <option value="">All</option>
+        </select>
+      </div>
+
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search by IP, MAC, hostname, or interface...">
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>IP Address</th>
+              <th>MAC Address</th>
+              <th class="col-hostname">Hostname</th>
+              <th>Interface</th>
+              <th>Type</th>
+              <th class="col-dhcp">DHCP</th>
+              <th>↑ Upload</th>
+              <th>↓ Download</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody">
+            <tr>
+              <td colspan="10">
+                <div class="loading">
+                  <div class="spinner"></div>
+                  Fetching connected users...
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const loginView = document.getElementById("loginView");
+    const dashView = document.getElementById("dashView");
+    const loginForm = document.getElementById("loginForm");
+    const loginErr = document.getElementById("loginErr");
+    const loginBtn = document.getElementById("loginBtn");
+    const tbody = document.getElementById("usersBody");
+    const searchInput = document.getElementById("searchInput");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const routerBadge = document.getElementById("routerBadge");
+    const statusBadge = document.getElementById("statusBadge");
+    const totalCount = document.getElementById("totalCount");
+    const dynamicCount = document.getElementById("dynamicCount");
+    const staticCount = document.getElementById("staticCount");
+    const totalTraffic = document.getElementById("totalTraffic");
+    const typeFilter = document.getElementById("typeFilter");
+    const vlanFilter = document.getElementById("vlanFilter");
+    const themeToggle = document.getElementById("themeToggle");
+
+    let allUsers = [];
+    let selectedVlan = "";
+    let selectedType = "all";
+
+    // ── Format bytes ──
+    function fmtBytes(bytes) {
+      if (!bytes) return "0 B";
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let i = 0;
+      let val = bytes;
+      while (val >= 1024 && i < units.length - 1) { val /= 1024; i++; }
+      return val.toFixed(i === 0 ? 0 : 1) + " " + units[i];
+    }
+
+    // ── Load VLANs ──
+    async function loadVlans() {
+      try {
+        const res = await fetch("/api/admin/vlans");
+        const data = await res.json();
+        if (data.vlans && data.vlans.length) {
+          vlanFilter.innerHTML = '<option value="">All</option>' +
+            data.vlans.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+        }
+      } catch {}
+    }
+
+    // Theme
+    const savedTheme = localStorage.getItem("admin-theme");
+    if (savedTheme === "light") {
+      document.body.classList.add("light");
+      themeToggle.textContent = "Dark";
+    }
+    themeToggle.addEventListener("click", () => {
+      document.body.classList.toggle("light");
+      const isLight = document.body.classList.contains("light");
+      themeToggle.textContent = isLight ? "Dark" : "Light";
+      localStorage.setItem("admin-theme", isLight ? "light" : "dark");
+    });
+
+    // ── View switching ──
+    function showLogin() {
+      loginView.style.display = "";
+      dashView.style.display = "none";
+    }
+    function showDash() {
+      loginView.style.display = "none";
+      dashView.style.display = "";
+      loadVlans();
+      restoreFiltersFromURL();
+      fetchUsers();
+      // Start socket-based realtime updates
+      startRealtimeWatch();
+    }
+
+    // ── Socket.io realtime ──
+    let socket = null;
+    function startRealtimeWatch() {
+      if (socket) return;
+      socket = io();
+      socket.on("connect", () => {
+        socket.emit("admin_watch");
+        sendFilters();
+      });
+      socket.on("admin_users", (data) => {
+        allUsers = data.users;
+        routerBadge.textContent = data.routerName || "--";
+        statusBadge.textContent = `${data.totalAll || 0} users (${data.totalQueued || 0} queued)`;
+        statusBadge.className = "badge online";
+        totalCount.textContent = allUsers.length;
+        dynamicCount.textContent = allUsers.filter(u => u.dynamic).length;
+        staticCount.textContent = allUsers.filter(u => !u.dynamic).length;
+        filterUsers();
+      });
+      socket.on("disconnect", () => {
+        statusBadge.textContent = "Reconnecting...";
+        statusBadge.className = "badge";
+      });
+    }
+
+    function sendFilters() {
+      if (socket && socket.connected) {
+        socket.emit("admin_filter", { vlan: selectedVlan, type: selectedType });
+      }
+    }
+
+    function stopRealtimeWatch() {
+      if (socket) {
+        socket.emit("admin_unwatch");
+        socket.disconnect();
+        socket = null;
+      }
+    }
+
+    // ── Check auth on load ──
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/admin/me");
+        const data = await res.json();
+        if (data.authenticated) showDash();
+        else showLogin();
+      } catch { showLogin(); }
+    }
+
+    // ── Login ──
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      loginErr.style.display = "none";
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Signing in...";
+      try {
+        const res = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          loginErr.textContent = data.error || "Login failed";
+          loginErr.style.display = "block";
+        } else {
+          showDash();
+        }
+      } catch {
+        loginErr.textContent = "Connection error";
+        loginErr.style.display = "block";
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Sign In";
+      }
+    });
+
+    // ── Logout ──
+    logoutBtn.addEventListener("click", async () => {
+      await fetch("/api/admin/logout", { method: "POST" });
+      allUsers = [];
+      stopRealtimeWatch();
+      tbody.innerHTML = '<tr><td colspan="10"><div class="loading"><div class="spinner"></div>Fetching connected users...</div></td></tr>';
+      showLogin();
+    });
+
+    // ── VLAN filter change ──
+    vlanFilter.addEventListener("change", () => {
+      selectedVlan = vlanFilter.value;
+      updateQueryParams();
+      sendFilters();
+    });
+
+    // ── Type filter change ──
+    typeFilter.addEventListener("change", () => {
+      selectedType = typeFilter.value;
+      updateQueryParams();
+      sendFilters();
+    });
+
+    // ── Update URL query params (bookmarkable URLs) ──
+    function updateQueryParams() {
+      const params = new URLSearchParams(window.location.search);
+      if (selectedVlan) params.set("vlan", selectedVlan); else params.delete("vlan");
+      if (selectedType !== "all") params.set("type", selectedType); else params.delete("type");
+      const qs = params.toString();
+      history.replaceState(null, "", qs ? window.location.pathname + "?" + qs : window.location.pathname);
+    }
+
+    // ── Restore filters from URL on load ──
+    function restoreFiltersFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      const urlVlan = params.get("vlan") || "";
+      const urlType = params.get("type") || "all";
+      if (urlVlan) { selectedVlan = urlVlan; vlanFilter.value = urlVlan; }
+      if (urlType !== "all") { selectedType = urlType; typeFilter.value = urlType; }
+    }
+
+    // ── Render ──
+    function renderUsers(users) {
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="error-msg">No users found</td></tr>';
+        return;
+      }
+      let grandUpload = 0, grandDownload = 0, grandTotal = 0;
+      tbody.innerHTML = users.map((u, i) => {
+        grandUpload += u.uploadBps || 0;
+        grandDownload += u.downloadBps || 0;
+        grandTotal += u.totalBytes || 0;
+        return `<tr>
+          <td>${i + 1}</td>
+          <td class="ip">${esc(u.ip)}</td>
+          <td class="mac">${esc(u.mac)}</td>
+          <td class="col-hostname">${esc(u.hostname) || '<span style="color:#64748b">--</span>'}</td>
+          <td>${esc(u.interface)}</td>
+          <td><span class="type-badge ${u.dynamic ? 'dynamic' : 'static'}">${u.dynamic ? 'Dynamic' : 'Static'}</span></td>
+          <td class="col-dhcp">${u.dhcpStatus === 'bound' ? '<span class="dhcp-bound">Bound</span>' : esc(u.dhcpStatus) || '--'}</td>
+          <td class="traffic-cell upload-cell">${fmtBps(u.uploadBps)}</td>
+          <td class="traffic-cell download-cell">${fmtBps(u.downloadBps)}</td>
+          <td class="traffic-cell total-cell">${fmtBytes(u.totalBytes)}</td>
+        </tr>`;
+      }).join("");
+      totalTraffic.textContent = fmtBytes(grandTotal);
+    }
+
+    function fmtBps(bits) {
+      if (!bits || bits <= 0) return "0 bps";
+      if (bits < 1000) return bits.toFixed(0) + " bps";
+      if (bits < 1e6) return (bits / 1e3).toFixed(1) + " Kbps";
+      if (bits < 1e9) return (bits / 1e6).toFixed(2) + " Mbps";
+      return (bits / 1e9).toFixed(2) + " Gbps";
+    }
+
+    function esc(s) {
+      if (!s) return "";
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function filterUsers() {
+      const q = searchInput.value.toLowerCase();
+      if (!q) return renderUsers(allUsers);
+      const filtered = allUsers.filter(u =>
+        u.ip.toLowerCase().includes(q) ||
+        u.mac.toLowerCase().includes(q) ||
+        (u.hostname || "").toLowerCase().includes(q) ||
+        (u.interface || "").toLowerCase().includes(q)
+      );
+      renderUsers(filtered);
+    }
+
+    async function fetchUsers() {
+      try {
+        statusBadge.textContent = "Loading...";
+        statusBadge.className = "badge";
+        const params = new URLSearchParams();
+        if (selectedVlan) params.set("vlan", selectedVlan);
+        if (selectedType !== "all") params.set("type", selectedType);
+        const res = await fetch("/api/admin/users?" + params.toString());
+        if (res.status === 401) { showLogin(); return; }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          tbody.innerHTML = `<tr><td colspan="10" class="error-msg">${esc(err.error || 'Failed to load')}</td></tr>`;
+          statusBadge.textContent = "Error";
+          return;
+        }
+        const data = await res.json();
+        allUsers = data.users;
+        routerBadge.textContent = data.routerName || "--";
+        statusBadge.textContent = `${allUsers.length} users`;
+        statusBadge.className = "badge online";
+        totalCount.textContent = allUsers.length;
+        dynamicCount.textContent = allUsers.filter(u => u.dynamic).length;
+        staticCount.textContent = allUsers.filter(u => !u.dynamic).length;
+        filterUsers();
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="10" class="error-msg">Connection error</td></tr>';
+        statusBadge.textContent = "Offline";
+      }
+    }
+
+    searchInput.addEventListener("input", filterUsers);
+    refreshBtn.addEventListener("click", fetchUsers);
+    checkAuth();
+  </script>
+</body>
+</html>
